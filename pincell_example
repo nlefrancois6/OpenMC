@@ -1,0 +1,74 @@
+import math
+import openmc
+import openmc_data_downloader as odd
+import matplotlib.pyplot as plt
+
+#Define parameters
+e=4.25 #uranium enrichment
+ri = 0.42 #inner clad diameter
+ro = 0.44 #outer clad diameter
+radii = [ri, ro]
+boxwidth = 1.24 #width of box surrounding the cylinder
+
+# Define materials
+fuel = openmc.Material(name='uo2')
+fuel.add_element('U',1,percent_type='ao',enrichment=e)
+fuel.add_element('O',2)
+fuel.set_density('g/cc',10.4)
+
+clad = openmc.Material(name='clad')
+clad.add_element('Zr',1)
+clad.set_density('g/cc',6)
+
+water = openmc.Material(name='water')
+water.add_element('O',1)
+water.add_element('H',2)
+water.set_density('g/cc',1.0)
+water.add_s_alpha_beta('c_H_in_H2O')
+
+# Instantiate a Materials collection, download cross-section data, and export to xml
+#Library options: 'ENDFB-7.1-WMP','ENDFB-7.1-NNDC','TENDL-2019','FENDL-3.1d'
+materials_file = openmc.Materials([fuel, clad, water])
+odd.just_in_time_library_generator(libraries=['ENDFB-7.1-NNDC','ENDFB-7.1-WMP','TENDL-2019','FENDL-3.1d'],materials=materials_file)
+materials_file.export_to_xml()
+
+#print(materials_file)
+
+#Define geometry
+pin_surfaces = [openmc.ZCylinder(r=r) for r in radii]
+pin_univ = openmc.model.pin(pin_surfaces,materials_file)
+
+bound_box = openmc.rectangular_prism(boxwidth,boxwidth, boundary_type='reflective')
+root_cell = openmc.Cell(fill=pin_univ, region=bound_box)
+geometry = openmc.Geometry([root_cell])
+geometry.export_to_xml()
+
+#Plot the geometry
+plot1 = openmc.Plot()
+plot1.filename = 'geometry_xz_view'
+plot1.basis = 'xz'
+plot1.color_by = 'material'
+plot1.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
+plot1.width = (boxwidth,boxwidth)
+
+plot2 = openmc.Plot()
+plot2.basis = 'xy'
+plot2.filename = 'geometry_xy_view'
+plot2.color_by = 'material'
+plot2.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
+plot2.width = (boxwidth,boxwidth)
+
+plots = openmc.Plots([plot1,plot2])
+plots.export_to_xml()
+
+openmc.plot_geometry()
+
+
+
+
+
+
+
+
+
+
