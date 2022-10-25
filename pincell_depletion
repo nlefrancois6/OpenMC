@@ -1,0 +1,115 @@
+import math
+import openmc
+import openmc.deplete
+import openmc_data_downloader as odd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Define parameters
+e=4.25 #uranium enrichment
+ppm_Boron= 2000 #boron concentration
+ri = 0.42 #inner clad diameter
+ro = 0.44 #outer clad diameter
+radii = [ri, ro]
+boxwidth = 1.24 #width of box surrounding the cylinder
+power = 174 #operating power of fuel pin [W/cm]
+
+# Define materials
+fuel = openmc.Material(name='uo2')
+fuel.add_element('U',1,percent_type='ao',enrichment=e)
+fuel.add_element('O',2)
+fuel.set_density('g/cc',10.4)
+fuel.volume = math.pi * radii[0] **2
+
+clad = openmc.Material(name='clad')
+clad.add_element('Zr',1)
+clad.set_density('g/cc',6)
+
+water = openmc.Material(name='water')
+water.add_element('O',1)
+water.add_element('H',2)
+water.add_element('B',ppm_Boron*1e-6) #add boron neutron poison for control
+water.set_density('g/cc',1.0)
+water.add_s_alpha_beta('c_H_in_H2O')
+
+
+# Instantiate a Materials collection, download cross-section data, and export to xml
+#Library options: 'ENDFB-7.1-WMP','ENDFB-7.1-NNDC','TENDL-2019','FENDL-3.1d'
+materials_file = openmc.Materials([fuel, clad, water])
+odd.just_in_time_library_generator(libraries=['ENDFB-7.1-NNDC','ENDFB-7.1-WMP','TENDL-2019','FENDL-3.1d'],materials=materials_file)
+materials_file.export_to_xml()
+
+#print(materials_file)
+
+#Define geometry
+pin_surfaces = [openmc.ZCylinder(r=r) for r in radii]
+pin_univ = openmc.model.pin(pin_surfaces,materials_file)
+
+bound_box = openmc.rectangular_prism(boxwidth,boxwidth, boundary_type='reflective')
+root_cell = openmc.Cell(fill=pin_univ, region=bound_box)
+geometry = openmc.Geometry([root_cell])
+geometry.export_to_xml()
+
+#OpenMC simulation settings
+batches = 100
+inactive = 10
+particles = 1000
+
+settings = openmc.Settings()
+settings.batches = batches
+settings.inactive = inactive
+settings.particles = particles
+settings.output = {'tallies': True}
+
+#Define uniform source
+bounds = [-boxwidth, -boxwidth, -1, boxwidth, boxwidth, 1]
+uniform_dist = openmc.stats.Box(bounds[:3], bounds[3:], only_fissionable=True)
+settings.source = openmc.Source(space=uniform_dist)
+
+settings.export_to_xml()
+
+#Define tallies
+tallies = openmc.Tallies()
+
+#Tally for flux spectrum
+
+#create equal-lethargy energies to put in filter
+energies = np.logspace(np.log10(1e-5),np.log10(20.0e6), 501)
+energy_filter = openmc.EnergyFilter(energies)
+
+tally = openmc.Tally(name='flux')
+tally.filters = [energy_filter]
+tally.scores = ['flux']
+tallies.append(tally)
+
+tallies.export_to_xml()
+
+#Depletion calculations
+
+#Load depletion chain
+chain = openmc.deplete.Chain.from_xml('./chain_endfb71_pwr.xml')
+#print(list(chain.nuclide_dict.items())[0:10])
+
+#Create operator
+model = openmc.Model(geometry=geometry, settings=settings)
+operator = openmc.deplete.CoupledOperator(model,'./chain_endfb71_pwr.xml')
+
+#Define time step size(s)
+max_step = 2* operator.heavy_metal / power*1e3
+print('Recommended depletion step size: {:5.3} [d]'.format(max_step))
+
+T = 30*6 #total time 6 months
+time_steps = [max_step]*round(T/max_step) #uniform steps of 30 days, 6 steps total
+
+#Create integrator
+integrator = openmc.deplete.PredictorIntegrator(operator, time_steps, power, timestep_units='d')
+
+#Run the depletion integrator
+integrator.integrate()
+ 
+
+
+
+
+
+

@@ -1,0 +1,19 @@
+import openmc
+import openmc.deplete
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Load depletion results
+results = openmc.deplete.Results('./depletion_results.h5')
+
+#Get time, k, and k_unc values, convert time to days
+time, k = results.get_keff()
+time /= (24*60*60)
+
+plt.errorbar(time,k[:,0],yerr=k[:,1])
+plt.xlabel('Time [d]')
+plt.ylabel('k_eff')
+plt.savefig('k_eff_depletion')
+
+
+
