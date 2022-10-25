@@ -2,6 +2,7 @@ import math
 import openmc
 import openmc_data_downloader as odd
 import matplotlib.pyplot as plt
+import numpy as np
 
 #Define parameters
 e=4.25 #uranium enrichment
@@ -62,6 +63,65 @@ plots = openmc.Plots([plot1,plot2])
 plots.export_to_xml()
 
 openmc.plot_geometry()
+
+
+#OpenMC simulation settings
+batches = 100
+inactive = 10
+particles = 1000
+
+settings = openmc.Settings()
+settings.batches = batches
+settings.inactive = inactive
+settings.particles = particles
+settings.output = {'tallies': True}
+
+#Define uniform source
+bounds = [-boxwidth, -boxwidth, -1, boxwidth, boxwidth, 1]
+uniform_dist = openmc.stats.Box(bounds[:3], bounds[3:], only_fissionable=True)
+settings.source = openmc.Source(space=uniform_dist)
+
+settings.export_to_xml()
+
+#Define tallies
+tallies = openmc.Tallies()
+
+#Flux spectrum example
+
+#create equal-lethargy energies to put in filter
+energies = np.logspace(np.log10(1e-5),np.log10(20.0e6), 501)
+energy_filter1 = openmc.EnergyFilter(energies)
+
+tally = openmc.Tally(name='flux1')
+tally.filters = [energy_filter1]
+tally.scores = ['flux']
+tallies.append(tally)
+
+
+#Tally arithmetic example
+
+#Energy filter for multi-group cross-section tallies
+energy_filter2 = openmc.EnergyFilter([0., 0.625, 20.0e6])
+
+#flux tally
+tally = openmc.Tally(name='flux2')
+tally.filters = [openmc.CellFilter([root_cell])]
+tally.filters.append(energy_filter2)
+tally.scores = ['flux']
+tallies.append(tally)
+
+#fission reaction rate tally
+tally = openmc.Tally(name='fuel rxn rates')
+tally.filters = [openmc.CellFilter([root_cell])]
+tally.filters.append(energy_filter2)
+tally.scores = ['nu-fission']
+tallies.append(tally)
+
+tallies.export_to_xml()
+
+#Run OpenMC simulation
+openmc.run()
+
 
 
 

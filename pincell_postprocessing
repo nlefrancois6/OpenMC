@@ -1,0 +1,29 @@
+import openmc
+import matplotlib.pyplot as plt
+
+#Load the statepoint file
+sp = openmc.StatePoint('statepoint.100.h5')
+
+
+flux1 = sp.get_tally(name='flux1')
+flux_df = flux1.get_pandas_dataframe()
+energies = flux_df['energy low [eV]']
+flux_mean = flux_df['mean']
+flux_unc = flux_df['std. dev.']
+
+plt.loglog(energies, flux_mean,'.')
+plt.xlabel('Energy [eV]')
+plt.ylabel('Flux [n/cm-eV-src]')
+plt.title('Pincell Flux Spectrum')
+plt.savefig('flux_spectrum')
+
+flux2 = sp.get_tally(name='flux2')
+#print(flux2)
+flux2_df = flux2.get_pandas_dataframe()
+#print(flux2_df)
+
+fuel_rxn_rates = sp.get_tally(name='fuel rxn rates')
+#print(fuel_rxn_rates)
+fission_rates = fuel_rxn_rates.get_slice(scores=['nu-fission'])
+fission_df = fission_rates.get_pandas_dataframe()
+#print(fission_df)
