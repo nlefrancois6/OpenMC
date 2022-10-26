@@ -1,5 +1,5 @@
 # OpenMC
-Modeling reactor criticality using OpenMC library
+Modeling reactor criticality and depletion using OpenMC library
 
 Files in this repository:
 
