@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 #Define parameters
-e=4.25 #uranium enrichment
-ppm_Boron= 2000 #boron concentration
+e=2.0 #uranium enrichment
+ppm_Boron= 2500 #boron concentration
 ri = 0.42 #inner clad diameter
 ro = 0.44 #outer clad diameter
 radii = [ri, ro]
@@ -69,8 +69,8 @@ openmc.plot_geometry()
 
 
 #OpenMC simulation settings
-batches = 10
-inactive = 1
+batches = 100
+inactive = 10
 particles = 1000
 
 settings = openmc.Settings()
@@ -100,7 +100,7 @@ t1.filters = [energy_filter]
 t1.scores = ['flux']
 tallies.append(t1)
 
-#TODO: Tally for spatial distribution of fission rates
+#Tallies for spatial distribution of flux, absorption and fission rates
 
 #X-Y cross-section mesh
 Nm = 100
@@ -112,7 +112,7 @@ m1_filter = openmc.MeshFilter(m1)
 
 t2 = openmc.Tally(name='xy_mesh')
 t2.filters = [m1_filter]
-t2.scores = ['flux','fission']
+t2.scores = ['flux','fission','absorption']
 tallies.append(t2)
 
 #X-Z cross-section mesh
@@ -124,7 +124,7 @@ m2_filter = openmc.MeshFilter(m2)
 
 t3 = openmc.Tally(name='xz_mesh')
 t3.filters = [m2_filter]
-t3.scores = ['flux','fission']
+t3.scores = ['flux','fission','absorption']
 tallies.append(t3)
 
 tallies.export_to_xml()

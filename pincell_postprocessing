@@ -1,8 +1,9 @@
 import openmc
 import matplotlib.pyplot as plt
+import numpy as np
 
 #Load the statepoint file
-sp = openmc.StatePoint('statepoint.10.h5')
+sp = openmc.StatePoint('statepoint.100.h5')
 
 
 t1 = sp.get_tally(name='flux')
@@ -21,11 +22,13 @@ plt.savefig('flux_spectrum')
 t2 = sp.get_tally(name='xy_mesh')
 flux2 = t2.get_slice(scores=['flux'])
 fission2 = t2.get_slice(scores=['fission'])
+abs2 = t2.get_slice(scores=['absorption'])
 
-N2 = 100
+N2 = round(np.sqrt(max(flux2.shape)))
 
 flux2.mean.shape = (N2,N2)
 fission2.mean.shape = (N2,N2)
+abs2.mean.shape = (N2,N2)
 
 plt.figure()
 plt.imshow(flux2.mean)
@@ -40,17 +43,27 @@ plt.imshow(fission2.mean)
 plt.colorbar()
 plt.xlabel('X')
 plt.ylabel('Y')
-plt.title('X-Y Cross-Section Flux')
+plt.title('X-Y Cross-Section Fission')
 plt.savefig('xy_fission')
+
+plt.figure()
+plt.imshow(abs2.mean)
+plt.colorbar()
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.title('X-Y Cross-Section Absorption')
+plt.savefig('xy_abs')
 
 t3 = sp.get_tally(name='xz_mesh')
 flux3 = t3.get_slice(scores=['flux'])
 fission3 = t3.get_slice(scores=['fission'])
+abs3 = t3.get_slice(scores=['absorption'])
 
-N3 = 100
+N3 = round(np.sqrt(max(flux3.shape)))
 
 flux3.mean.shape = (N3,N3)
 fission3.mean.shape = (N3,N3)
+abs3.mean.shape = (N2,N2)
 
 plt.figure()
 plt.imshow(flux3.mean)
@@ -67,4 +80,12 @@ plt.xlabel('X')
 plt.ylabel('Z')
 plt.title('X-Z Cross-Section Flux')
 plt.savefig('xz_fission')
+
+plt.figure()
+plt.imshow(abs3.mean)
+plt.colorbar()
+plt.xlabel('X')
+plt.ylabel('Z')
+plt.title('X-Z Cross-Section Absorption')
+plt.savefig('xz_abs')
 

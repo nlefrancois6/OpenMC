@@ -15,5 +15,29 @@ plt.xlabel('Time [d]')
 plt.ylabel('k_eff')
 plt.savefig('k_eff_depletion')
 
+#Get atom concentrations
+_, u5 = results.get_atoms('1','U235')
+_, xe135 = results.get_atoms('1','Xe135')
+#_, b10 = results.get_atoms('3','B10')
+#_, b11 = results.get_atoms('3','B11')
+
+plt.figure()
+plt.plot(time, u5, 'o')
+plt.xlabel('Time [d]')
+plt.ylabel('Number of atoms - U235')
+plt.savefig('concentration_U235')
+
+plt.figure()
+plt.plot(time, xe135, 'o')
+plt.xlabel('Time [d]')
+plt.ylabel('Number of atoms - Xe135')
+plt.savefig('concentration_Xe135')
+
+#plt.figure()
+#plt.plot(time, b10, 'o', label='B10')
+#plt.plot(time, b11, 'o', label='B11')
+#plt.xlabel('Time [d]')
+#plt.ylabel('Number of atoms - Boron')
+#plt.savefig('concentration_B')
 
 

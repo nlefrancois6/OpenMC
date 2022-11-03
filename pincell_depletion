@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 #Define parameters
-e=4.25 #uranium enrichment
-ppm_Boron= 2000 #boron concentration
+e=2.0 #uranium enrichment
+ppm_Boron= 2500 #boron concentration
 ri = 0.42 #inner clad diameter
 ro = 0.44 #outer clad diameter
 radii = [ri, ro]
@@ -82,6 +82,33 @@ tally.filters = [energy_filter]
 tally.scores = ['flux']
 tallies.append(tally)
 
+#Tallies for spatial distribution of flux, absorption and fission rates
+
+#X-Y cross-section mesh
+Nm = 100
+m1 = openmc.RegularMesh()
+m1.dimension = [Nm,Nm]
+m1.lower_left = [-boxwidth/2, -boxwidth/2]
+m1.upper_right = [boxwidth/2, boxwidth/2]
+m1_filter = openmc.MeshFilter(m1)
+
+t2 = openmc.Tally(name='xy_mesh')
+t2.filters = [m1_filter]
+t2.scores = ['flux','fission','absorption']
+tallies.append(t2)
+
+#X-Z cross-section mesh
+m2 = openmc.RegularMesh()
+m2.dimension = [Nm,1,Nm]
+m2.lower_left = [-boxwidth/2, -0.1, -1]
+m2.upper_right = [boxwidth/2, 0.1, 1]
+m2_filter = openmc.MeshFilter(m2)
+
+t3 = openmc.Tally(name='xz_mesh')
+t3.filters = [m2_filter]
+t3.scores = ['flux','fission','absorption']
+tallies.append(t3)
+
 tallies.export_to_xml()
 
 #Depletion calculations
@@ -96,10 +123,15 @@ operator = openmc.deplete.CoupledOperator(model,'./chain_endfb71_pwr.xml')
 
 #Define time step size(s)
 max_step = 2* operator.heavy_metal / power*1e3
-print('Recommended depletion step size: {:5.3} [d]'.format(max_step))
+print('Recommended max depletion step size: {:5.3} [d]'.format(max_step))
 
-T = 30*6 #total time 6 months
-time_steps = [max_step]*round(T/max_step) #uniform steps of 30 days, 6 steps total
+T = 30*2 #total time 6 months
+step = 10
+if max_step<step:
+	step = max_step
+print('Depletion step size: {:5} [d]'.format(step))
+
+time_steps = [0.25]*4 + [0.5]*4 + [1]*2 + [step]*round(T/step) #uniform step size, total duration T
 
 #Create integrator
 integrator = openmc.deplete.PredictorIntegrator(operator, time_steps, power, timestep_units='d')
