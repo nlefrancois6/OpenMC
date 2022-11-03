@@ -6,6 +6,7 @@ import numpy as np
 
 #Define parameters
 e=4.25 #uranium enrichment
+ppm_Boron= 2000 #boron concentration
 ri = 0.42 #inner clad diameter
 ro = 0.44 #outer clad diameter
 radii = [ri, ro]
@@ -24,8 +25,10 @@ clad.set_density('g/cc',6)
 water = openmc.Material(name='water')
 water.add_element('O',1)
 water.add_element('H',2)
+water.add_element('B',ppm_Boron*1e-6) #add boron neutron poison for control
 water.set_density('g/cc',1.0)
 water.add_s_alpha_beta('c_H_in_H2O')
+
 
 # Instantiate a Materials collection, download cross-section data, and export to xml
 #Library options: 'ENDFB-7.1-WMP','ENDFB-7.1-NNDC','TENDL-2019','FENDL-3.1d'
@@ -46,7 +49,7 @@ geometry.export_to_xml()
 
 #Plot the geometry
 plot1 = openmc.Plot()
-plot1.filename = 'geometry_xz_view'
+plot1.filename = 'pincell_geometry_xz_view'
 plot1.basis = 'xz'
 plot1.color_by = 'material'
 plot1.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
@@ -54,7 +57,7 @@ plot1.width = (boxwidth,boxwidth)
 
 plot2 = openmc.Plot()
 plot2.basis = 'xy'
-plot2.filename = 'geometry_xy_view'
+plot2.filename = 'pincell_geometry_xy_view'
 plot2.color_by = 'material'
 plot2.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
 plot2.width = (boxwidth,boxwidth)
@@ -66,8 +69,8 @@ openmc.plot_geometry()
 
 
 #OpenMC simulation settings
-batches = 100
-inactive = 10
+batches = 10
+inactive = 1
 particles = 1000
 
 settings = openmc.Settings()
@@ -86,36 +89,43 @@ settings.export_to_xml()
 #Define tallies
 tallies = openmc.Tallies()
 
-#Flux spectrum example
+#Tally for flux spectrum
 
 #create equal-lethargy energies to put in filter
 energies = np.logspace(np.log10(1e-5),np.log10(20.0e6), 501)
-energy_filter1 = openmc.EnergyFilter(energies)
+energy_filter = openmc.EnergyFilter(energies)
 
-tally = openmc.Tally(name='flux1')
-tally.filters = [energy_filter1]
-tally.scores = ['flux']
-tallies.append(tally)
+t1 = openmc.Tally(name='flux')
+t1.filters = [energy_filter]
+t1.scores = ['flux']
+tallies.append(t1)
 
+#TODO: Tally for spatial distribution of fission rates
 
-#Tally arithmetic example
+#X-Y cross-section mesh
+Nm = 100
+m1 = openmc.RegularMesh()
+m1.dimension = [Nm,Nm]
+m1.lower_left = [-boxwidth/2, -boxwidth/2]
+m1.upper_right = [boxwidth/2, boxwidth/2]
+m1_filter = openmc.MeshFilter(m1)
 
-#Energy filter for multi-group cross-section tallies
-energy_filter2 = openmc.EnergyFilter([0., 0.625, 20.0e6])
+t2 = openmc.Tally(name='xy_mesh')
+t2.filters = [m1_filter]
+t2.scores = ['flux','fission']
+tallies.append(t2)
 
-#flux tally
-tally = openmc.Tally(name='flux2')
-tally.filters = [openmc.CellFilter([root_cell])]
-tally.filters.append(energy_filter2)
-tally.scores = ['flux']
-tallies.append(tally)
+#X-Z cross-section mesh
+m2 = openmc.RegularMesh()
+m2.dimension = [Nm,1,Nm]
+m2.lower_left = [-boxwidth/2, -0.1, -1]
+m2.upper_right = [boxwidth/2, 0.1, 1]
+m2_filter = openmc.MeshFilter(m2)
 
-#fission reaction rate tally
-tally = openmc.Tally(name='fuel rxn rates')
-tally.filters = [openmc.CellFilter([root_cell])]
-tally.filters.append(energy_filter2)
-tally.scores = ['nu-fission']
-tallies.append(tally)
+t3 = openmc.Tally(name='xz_mesh')
+t3.filters = [m2_filter]
+t3.scores = ['flux','fission']
+tallies.append(t3)
 
 tallies.export_to_xml()
 
