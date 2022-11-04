@@ -1,0 +1,182 @@
+import math
+import openmc
+import openmc_data_downloader as odd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Define parameters
+e=2.0 #uranium enrichment
+pitch = 1.25 #pitch of fuel rod lattice
+r_core = 5.0 #total core radius
+r_pin = 0.42 #inner clad diameter
+a_e = 1.0; b_e = 2.0 #linear enrichment distribution params
+
+def build_model(pitch, r_core, r_pin, a_e, b_e)
+	
+	r_clad = r_pin + 0.02 #outer clad diameter 
+	radii = [r_pin, r_clad]
+        
+	#Linear enrichment distribution
+        a_e = 1; b_e = 2 #fit params for linear enrichment distribution (set a=0 to get constant enrichment)
+        def e_lin(r, a, b):
+            return a*r + b
+        r_vals = np.arange(0,4*pitch,pitch) #radius of each lattice ring
+        e_vals = e_lin(r_vals, a, b) #enrichment of each lattice ring
+
+        # Define materials
+        fuel0 = openmc.Material(name='fuel0')
+        fuel0.add_element('U',1,percent_type='ao',enrichment=e_vals[0])
+        fuel0.add_element('O',2)
+        fuel0.set_density('g/cc',10.4)
+
+        fuel1 = openmc.Material(name='fuel1')
+        fuel1.add_element('U',1,percent_type='ao',enrichment=e_vals[1])
+        fuel1.add_element('O',2)
+        fuel1.set_density('g/cc',10.4)
+
+        fuel2 = openmc.Material(name='fuel2')
+        fuel2.add_element('U',1,percent_type='ao',enrichment=e_vals[2])
+        fuel2.add_element('O',2)
+        fuel2.set_density('g/cc',10.4)
+
+        fuel3 = openmc.Material(name='fuel3')
+        fuel3.add_element('U',1,percent_type='ao',enrichment=e_vals[3])
+        fuel3.add_element('O',2)
+        fuel3.set_density('g/cc',10.4)
+
+        clad = openmc.Material(name='clad')
+        clad.add_element('Zr',1)
+        clad.set_density('g/cc',6)
+
+        water = openmc.Material(name='water')
+        water.add_element('O',1)
+        water.add_element('H',2)
+        water.set_density('g/cc',1.0)
+        water.add_s_alpha_beta('c_H_in_H2O')
+
+
+        # Instantiate a Materials collection, download cross-section data, and export to xml
+        #Library options: 'ENDFB-7.1-WMP','ENDFB-7.1-NNDC','TENDL-2019','FENDL-3.1d'
+        materials_file = openmc.Materials([fuel0, fuel1, fuel2, fuel3, clad, water])
+        odd.just_in_time_library_generator(libraries=['ENDFB-7.1-NNDC','ENDFB-7.1-WMP','TENDL-2019','FENDL-3.1d'],materials=materials_file)
+        materials_file.export_to_xml()
+
+        #Define geometry
+        pin_surfaces = [openmc.ZCylinder(r=r) for r in radii]
+        pin_universe0 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel0, clad, water]))
+        pin_universe1 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel1, clad, water]))
+        pin_universe2 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel2, clad, water]))
+        pin_universe3 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel3, clad, water]))
+
+        all_water_cell = opened.Cell(fill=water)
+        outer_universe = opened.Universe(cells=(all_water_cell,))
+
+        lattice = opened.HexLattice()
+        lattice.center = (0.,0.)
+        lattice.pitch = (pitch,)
+        lattice.outer = outer_universe
+
+        ring_0 = [pin_universe3]*18
+        ring_1 = [pin_universe2]*12
+        ring_2 = [pin_universe1]*6
+        ring_3 = [pin_universe0]
+
+        lattice.universes = [ring_0, ring_1, ring_2, ring_3] #listed from outer to inner
+
+        outer_surface = openmc.ZCylinder(r=r_core, boundary_type='vacuum')
+        main_cell = openmc.Cell(fill=lattice, region=-outer_surface)
+        geometry = openmc.Geometry([main_cell])
+
+
+        #OpenMC simulation settings
+        batches = 10
+        inactive = 1
+        particles = 1000
+
+        settings = openmc.Settings()
+        settings.batches = batches
+        settings.inactive = inactive
+        settings.particles = particles
+        settings.output = {'tallies': True}
+
+        #Define uniform source
+        bounds = [-r_core, -r_core, -1, r_core, r_core, 1]
+        uniform_dist = openmc.stats.Box(bounds[:3], bounds[3:], only_fissionable=True)
+        settings.source = openmc.Source(space=uniform_dist)
+
+        #Define tallies
+        tallies = openmc.Tallies()
+
+        #Tally for flux spectrum
+
+        #create equal-lethargy energies to put in filter
+        energies = np.logspace(np.log10(1e-5),np.log10(20.0e6), 501)
+        energy_filter = openmc.EnergyFilter(energies)
+
+        t1 = openmc.Tally(name='flux')
+        t1.filters = [energy_filter]
+        t1.scores = ['flux']
+        tallies.append(t1)
+
+        #Tallies for spatial distribution of flux, absorption and fission rates
+
+        #X-Y cross-section mesh
+        Nm = 100
+        m1 = openmc.RegularMesh()
+        m1.dimension = [Nm,Nm]
+        m1.lower_left = [-r_core/2, -r_core/2]
+        m1.upper_right = [r_core/2, r_core/2]
+        m1_filter = openmc.MeshFilter(m1)
+
+        t2 = openmc.Tally(name='xy_mesh')
+        t2.filters = [m1_filter]
+        t2.scores = ['flux','fission','absorption']
+        tallies.append(t2)
+
+        #X-Z cross-section mesh
+        m2 = openmc.RegularMesh()
+        m2.dimension = [Nm,1,Nm]
+        m2.lower_left = [-r_core/2, -0.1, -1]
+        m2.upper_right = [r_core/2, 0.1, 1]
+        m2_filter = openmc.MeshFilter(m2)
+
+        t3 = openmc.Tally(name='xz_mesh')
+        t3.filters = [m2_filter]
+        t3.scores = ['flux','fission','absorption']
+        tallies.append(t3)
+
+def get_k_eff(pitch, r_core, r_pin, a_e, b_e):
+	#Evaluate k_eff for a parametric model
+	model = build_model(pitch, r_core, r_pin, a_e, b_e)
+
+	#Run OpenMC simulation
+	openmc.run()
+	
+	#Load the statepoint file
+	#sp = openmc.StatePoint('statepoint.10.h5')
+	#k_eff = 
+	#return k_eff
+
+Np = 5
+r_pin_vals = np.linspace(0.2, 1.0, Np)
+k_eff_vals = np.zeros([Np,1])
+
+i=0
+for r_pin in r_pin_vals:
+	k_eff_vals[i = get_k_eff(pitch,r_core,r_pin[i],a_e,b_e)
+	i = i + 1
+
+plt.plot(r_pin_vals,k_eff_vals)
+plt.xlabel('Pin Radius [m]')
+plt.ylabel('k_eff')
+plt.savefig('parametric_k_eff')
+
+
+
+
+
+
+
+
+
+
