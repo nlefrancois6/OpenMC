@@ -145,6 +145,10 @@ def build_model(pitch, r_core, r_pin, a_e, b_e)
         t3.scores = ['flux','fission','absorption']
         tallies.append(t3)
 
+	model = openmc.model.Model(geometry, materials_file, settings, tallies)
+
+	return model
+
 def get_k_eff(pitch, r_core, r_pin, a_e, b_e):
 	#Evaluate k_eff for a parametric model
 	model = build_model(pitch, r_core, r_pin, a_e, b_e)
@@ -163,7 +167,7 @@ k_eff_vals = np.zeros([Np,1])
 
 i=0
 for r_pin in r_pin_vals:
-	k_eff_vals[i = get_k_eff(pitch,r_core,r_pin[i],a_e,b_e)
+	k_eff_vals[i] = get_k_eff(pitch,r_core,r_pin[i],a_e,b_e)
 	i = i + 1
 
 plt.plot(r_pin_vals,k_eff_vals)
