@@ -3,35 +3,36 @@ import openmc
 import openmc_data_downloader as odd
 import matplotlib.pyplot as plt
 import numpy as np
-
+	
 #Define parameters
 e=2.0 #uranium enrichment
-pitch = 1.25 #pitch of fuel rod lattice
-r_core = 5.0 #total core radius
+pitch = 1.0 #pitch of fuel rod lattice
+r_core = 7.0 #total core radius
 r_pin = 0.42 #inner clad diameter
-r_clad = r_pin + 0.02 #outer clad diameter 
+r_clad = r_pin + 0.02 #outer clad diameter
 radii = [r_pin, r_clad]
-
+	
 #Linear enrichment distribution
 a_e = 1; b_e = 2 #fit params for linear enrichment distribution (set a=0 to get constant enrichment)
 def e_lin(r, a, b):
 	return a*r + b
 def e_quad(r, a, b, c):
 	return a*r**2 + b*r + c
+	
 r_vals = np.arange(0,4*pitch,pitch) #radius of each lattice ring
-e_vals = e_lin(r_vals, a, b) #enrichment of each lattice ring
-
+e_vals = e_lin(r_vals, a_e, b_e) #enrichment of each lattice ring
+	
 # Define materials
 fuel0 = openmc.Material(name='fuel0')
 fuel0.add_element('U',1,percent_type='ao',enrichment=e_vals[0])
 fuel0.add_element('O',2)
 fuel0.set_density('g/cc',10.4)
-
+	
 fuel1 = openmc.Material(name='fuel1')
 fuel1.add_element('U',1,percent_type='ao',enrichment=e_vals[1])
 fuel1.add_element('O',2)
 fuel1.set_density('g/cc',10.4)
-
+	
 fuel2 = openmc.Material(name='fuel2')
 fuel2.add_element('U',1,percent_type='ao',enrichment=e_vals[2])
 fuel2.add_element('O',2)
@@ -66,10 +67,10 @@ pin_universe1 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel1, clad, wat
 pin_universe2 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel2, clad, water]))
 pin_universe3 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel3, clad, water]))
 
-all_water_cell = opened.Cell(fill=water)
-outer_universe = opened.Universe(cells=(all_water_cell,))
+all_water_cell = openmc.Cell(fill=water)
+outer_universe = openmc.Universe(cells=(all_water_cell,))
 
-lattice = opened.HexLattice()
+lattice = openmc.HexLattice()
 lattice.center = (0.,0.)
 lattice.pitch = (pitch,)
 lattice.outer = outer_universe
@@ -92,14 +93,14 @@ plot1 = openmc.Plot()
 plot1.filename = 'lattice_geometry_xz_view'
 plot1.basis = 'xz'
 plot1.color_by = 'material'
-plot1.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
+plot1.colors = {fuel1: 'yellow', fuel2: 'yellow', fuel3: 'yellow', water: 'blue', clad: 'black'}
 plot1.width = (r_core,r_core)
 
 plot2 = openmc.Plot()
 plot2.basis = 'xy'
 plot2.filename = 'lattice_geometry_xy_view'
 plot2.color_by = 'material'
-plot2.colors = {fuel: 'yellow', water: 'blue', clad: 'black'}
+plot2.colors = {fuel1: 'yellow', fuel2: 'yellow', fuel3: 'yellow', water: 'blue', clad: 'black'}
 plot2.width = (r_core,r_core)
 
 plots = openmc.Plots([plot1,plot2])
@@ -171,14 +172,3 @@ tallies.export_to_xml()
 
 #Run OpenMC simulation
 openmc.run()
-
-
-
-
-
-
-
-
-
-
-
