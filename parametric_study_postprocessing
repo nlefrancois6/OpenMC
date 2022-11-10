@@ -1,0 +1,117 @@
+import openmc
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Load parameters
+params = np.loadtxt('params.txt')
+r_pin = params[0]
+pitch = params[1]
+r_core = params[2]
+a_e = params[3]
+b_e = params[4]
+
+#Load results
+k_eff = np.loadtxt('k_eff_data.txt')
+fu = np.loadtxt('flux_uniformity_data.txt')
+
+#Reshape results into original dimensions
+Np = 6
+k_eff = np.reshape(k_eff, (Np, Np, Np, Np))
+fu = np.reshape(fu, (Np, Np, Np, Np))
+
+#print(k_eff)
+#print(fu)
+
+#Get parametrized results
+k_pin_pitch = np.mean(np.mean(k_eff,3),2)
+k_pin_a = np.mean(np.mean(k_eff,3),1)
+k_pin_b = np.mean(np.mean(k_eff,2),1)
+k_pitch_a = np.mean(np.mean(k_eff,3),0)
+k_a_b = np.mean(np.mean(k_eff,1),0)
+
+fu_pin_pitch = np.mean(np.mean(fu,3),2)
+fu_pin_a = np.mean(np.mean(fu,3),1)
+fu_pin_b = np.mean(np.mean(fu,2),1)
+fu_pitch_a = np.mean(np.mean(fu,3),0)
+fu_a_b = np.mean(np.mean(fu,1),0)
+
+#Plot results
+plt.figure()
+plt.subplot(3,2,1)
+plt.pcolor(r_pin, pitch, k_pin_pitch)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('pitch')
+plt.title('k_eff')
+
+plt.subplot(3,2,2)
+plt.pcolor(r_pin, a_e, k_pin_a)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('a')
+plt.title('k_eff')
+
+plt.subplot(3,2,3)
+plt.pcolor(r_pin, b_e, k_pin_b)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('b')
+plt.title('k_eff')
+
+plt.subplot(3,2,4)
+plt.pcolor(pitch, a_e, k_pitch_a)
+plt.colorbar()
+plt.xlabel('pitch')
+plt.ylabel('a')
+plt.title('k_eff')
+
+plt.subplot(3,2,5)
+plt.pcolor(a_e, b_e, k_pitch_a)
+plt.colorbar()
+plt.xlabel('a')
+plt.ylabel('b')
+plt.title('k_eff')
+
+plt.subplots_adjust(hspace=1.0)
+
+plt.savefig('k_eff_parametric')
+
+plt.figure()
+plt.subplot(3,2,1)
+plt.pcolor(r_pin, pitch, fu_pin_pitch)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('pitch')
+plt.title('fu')
+
+plt.subplot(3,2,2)
+plt.pcolor(r_pin, a_e, fu_pin_a)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('a')
+plt.title('fu')
+
+plt.subplot(3,2,3)
+plt.pcolor(r_pin, b_e, fu_pin_b)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('b')
+plt.title('fu')
+
+plt.subplot(3,2,4)
+plt.pcolor(pitch, a_e, fu_pitch_a)
+plt.colorbar()
+plt.xlabel('pitch')
+plt.ylabel('a')
+plt.title('fu')
+
+plt.subplot(3,2,5)
+plt.pcolor(a_e, b_e, fu_pitch_a)
+plt.colorbar()
+plt.xlabel('a')
+plt.ylabel('b')
+plt.title('fu')
+
+plt.subplots_adjust(hspace=1.0)
+
+plt.savefig('fu_parametric')
