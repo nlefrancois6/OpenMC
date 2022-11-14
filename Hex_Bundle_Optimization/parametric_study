@@ -12,7 +12,7 @@ r_core = 10.0 #total core radius
 r_pin = 0.42 #inner clad diameter
 a_e = 1.0;b_e = 2.0 #linear enrichment distribution params
 
-Np = 6
+Np = 7
 num_batches = 25
 
 def build_model(pitch, r_core, r_pin, a_e, b_e):
@@ -136,7 +136,7 @@ def build_model(pitch, r_core, r_pin, a_e, b_e):
 
 	t2 = openmc.Tally(name='xy_mesh')
 	t2.filters = [m1_filter]
-	t2.scores = ['flux','fission','absorption']
+	t2.scores = ['flux','fission','absorption','heating']
 	tallies.append(t2)
 
 	#X-Z cross-section mesh
@@ -148,7 +148,7 @@ def build_model(pitch, r_core, r_pin, a_e, b_e):
 
 	t3 = openmc.Tally(name='xz_mesh')
 	t3.filters = [m2_filter]
-	t3.scores = ['flux','fission','absorption']
+	t3.scores = ['flux','fission','absorption','heating']
 	tallies.append(t3)
 
 	geometry.export_to_xml()
@@ -178,8 +178,12 @@ def get_model_metrics(pitch, r_core, r_pin, a_e, b_e):
 	t = sp.get_tally(name='xy_mesh')
 	flux_xy = t.get_slice(scores=['flux']).get_pandas_dataframe()
 	flux_uniformity = (flux_xy['mean'].max()-flux_xy['mean'].min())/flux_xy['mean'].mean() # (max-min)/mean
-
-	return k_eff, flux_uniformity
+	
+	#Get average heat generation
+	heat_xy = t.get_slice(scores=['heating']).get_pandas_dataframe()
+	heat_gen = heat_xy['mean'].mean()
+	
+	return k_eff, flux_uniformity, heat_gen
 
 #Define range for each parameter
 r_pin_vals = np.linspace(0.2, 1.0, Np)
@@ -195,6 +199,7 @@ np.savetxt('params.txt',params)
 
 k_eff_vals = np.zeros([Np,Np,Np,Np])
 flux_uniformity_vals = np.zeros([Np,Np,Np,Np])
+heat_gen_vals = np.zeros([Np,Np,Np,Np])
 
 print('Np =',str(Np))
 print('Number of gridpoints:',str(Np**4))
@@ -208,7 +213,7 @@ for i1 in range(len(r_pin_vals)):
 			for i4 in range(len(b_e_vals)):
 				print('Gridpoint ',str(n))
 				#print(i1,i2,i3,i4)
-				[k_eff_vals[i1,i2,i3,i4], flux_uniformity_vals[i1,i2,i3,i4]] = get_model_metrics(pitch_vals[i2],r_core_vals[i2],r_pin_vals[i1],a_e_vals[i3],b_e_vals[i4])
+				[k_eff_vals[i1,i2,i3,i4], flux_uniformity_vals[i1,i2,i3,i4], heat_gen_vals[i1,i2,i3,i4]] = get_model_metrics(pitch_vals[i2],r_core_vals[i2],r_pin_vals[i1],a_e_vals[i3],b_e_vals[i4])
 				n = n+1
 print('Gridsearch complete!')
 
@@ -218,10 +223,12 @@ print('Gridsearch complete!')
 #Reshape results arrays from 4d to 2d so we can use np.savetxt
 k_eff_reshaped = np.reshape(k_eff_vals, ((int(np.sqrt(np.prod(k_eff_vals.shape))),int(np.sqrt(np.prod(k_eff_vals.shape))))))
 flux_uniformity_reshaped = np.reshape(flux_uniformity_vals, ((int(np.sqrt(np.prod(flux_uniformity_vals.shape))),int(np.sqrt(np.prod(flux_uniformity_vals.shape))))))
+heat_gen_reshaped = np.reshape(heat_gen_vals, ((int(np.sqrt(np.prod(heat_gen_vals.shape))),int(np.sqrt(np.prod(heat_gen_vals.shape))))))
 
 #Save results to txt files
 np.savetxt('k_eff_data.txt',k_eff_reshaped)
 np.savetxt('flux_uniformity_data.txt',flux_uniformity_reshaped)
+np.savetxt('heat_gen_data.txt',heat_gen_reshaped)
 
 #plt.figure()
 #plt.plot(r_pin_vals,k_eff_vals)

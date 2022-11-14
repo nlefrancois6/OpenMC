@@ -13,11 +13,13 @@ b_e = params[4]
 #Load results
 k_eff = np.loadtxt('k_eff_data.txt')
 fu = np.loadtxt('flux_uniformity_data.txt')
+hg = np.loadtxt('heat_gen_data.txt')
 
 #Reshape results into original dimensions
-Np = 6
+Np = 7
 k_eff = np.reshape(k_eff, (Np, Np, Np, Np))
 fu = np.reshape(fu, (Np, Np, Np, Np))
+hg = np.reshape(hg, (Np, Np, Np, Np))
 
 #print(k_eff)
 #print(fu)
@@ -34,6 +36,12 @@ fu_pin_a = np.mean(np.mean(fu,3),1)
 fu_pin_b = np.mean(np.mean(fu,2),1)
 fu_pitch_a = np.mean(np.mean(fu,3),0)
 fu_a_b = np.mean(np.mean(fu,1),0)
+
+hg_pin_pitch = np.mean(np.mean(hg,3),2)
+hg_pin_a = np.mean(np.mean(hg,3),1)
+hg_pin_b = np.mean(np.mean(hg,2),1)
+hg_pitch_a = np.mean(np.mean(hg,3),0)
+hg_a_b = np.mean(np.mean(hg,1),0)
 
 #Plot results
 plt.figure()
@@ -115,3 +123,43 @@ plt.title('fu')
 plt.subplots_adjust(hspace=1.0)
 
 plt.savefig('fu_parametric')
+
+plt.figure()
+plt.subplot(3,2,1)
+plt.pcolor(r_pin, pitch, hg_pin_pitch)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('pitch')
+plt.title('heat')
+
+plt.subplot(3,2,2)
+plt.pcolor(r_pin, a_e, hg_pin_a)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('a')
+plt.title('heat')
+
+plt.subplot(3,2,3)
+plt.pcolor(r_pin, b_e, hg_pin_b)
+plt.colorbar()
+plt.xlabel('r_pin')
+plt.ylabel('b')
+plt.title('heat')
+
+plt.subplot(3,2,4)
+plt.pcolor(pitch, a_e, hg_pitch_a)
+plt.colorbar()
+plt.xlabel('pitch')
+plt.ylabel('a')
+plt.title('heat')
+
+plt.subplot(3,2,5)
+plt.pcolor(a_e, b_e, hg_pitch_a)
+plt.colorbar()
+plt.xlabel('a')
+plt.ylabel('b')
+plt.title('heat')
+
+plt.subplots_adjust(hspace=1.0)
+
+plt.savefig('heat_gen_parametric')
