@@ -22,4 +22,5 @@ Hex_Bundle_Optimization:
 
 Depletion:
 - Using the openmc.deplete functions to evaluate the behaviour of U235 & Xe135 concentrations and k_eff values in my simple pincell model over a period of 6 months.
-![image](k_eff_depletion.png) ![image](concentration_U235.png)
+- 
+![image](k_eff_depletion.png) ![image](concentration_U235.png) ![image](concentration_Xe135.png)
