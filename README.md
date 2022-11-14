@@ -1,17 +1,17 @@
 # OpenMC
 Modeling reactor criticality and depletion using OpenMC library
 
-Files in this repository:
+Folders in this repository:
 
-pincell_example.txt - Creating a simple model of a pincell geometry to test all my simulation ideas on before applying them to the more complicated RBMK model. Used openmc_data_downloader library to download the ENDFB-7.1-NNDC cross-section data (and TENDL-2019 data for O18 which was absent from EDFB).
+Tutorial_Examples:
 
-pincell_postprocessing.txt - Read simulation results from statepoint file and create plots of flux spectrum and spatial distributions of flux, absorption, and fission.
+- Tutorial using RBMK reactor geometry model. Using openmc-data_downloader to get cross-section data from ENDFB-7.1-NNDC and TENDL-2019 datasets. Conducting a criticality search to find the critical boron concentration for a given set of model parameters.
+- Building a simple pincell model with spatial and energy tallies.
+- Postprocessing script to read tallies and plot flux spectrum & X-Y and X-Z spatial distributions of flux, fission, and absorption.
 
-pincell_depletion.txt - Use depletion interface to simulate fuel pin depletion over 6 months and evaluate how k_eff changes over time
+Hex_Bundle_Optimization:
+- Building a model for a hexagonal lattice of pincells. Enrichment is varied as a linear function of radius in order to flatten the spatial flux distribution.
+- Create a parametric model object which takes as input the lattice pitch, total core radius, pin radius, and linear fit parameters for the enrichment distribution and outputs the flux uniformity metric and k_eff. Conduct a coarse gridsearch to identify trends in these outputs.
 
-pincell_depletion_post_processing.txt - Read simulation results from statepoint file and plot k_eff(t) and concentrations of U235 & Xe135 over time.
-
-RBMK_tutorial.txt - Following the tutorial for creating an RBMK reactor model. 
-                    Used openmc_data_downloader library to download the ENDFB-7.1-NNDC cross-section data and parametrized uranium enrichment & boron concentration
-
-RBMK_criticality_search.txt - Use search_for_keff() function to perform a criticality search as a function of boron concentration on the parametrized RBMK model
+Depletion:
+- Using the openmc.deplete functions to evaluate the behaviour of U235 & Xe135 concentrations and k_eff values in my simple pincell model over a period of 6 months.
