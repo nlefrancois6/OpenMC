@@ -1,0 +1,309 @@
+import math
+import openmc
+import openmc_data_downloader as odd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from openbox import sp, Optimizer
+
+#Define parameters
+e=2.0 #uranium enrichment
+pitch = 1.0 #pitch of fuel rod lattice
+r_core = 10.0 #total core radius
+r_pin = 0.42 #inner clad diameter
+a_e = 1.0;b_e = 2.0 #linear enrichment distribution params
+
+num_batches = 25 #number of batches to be simulated
+
+def build_model(pitch, r_core, r_pin, a_e, b_e):
+	
+	r_clad = r_pin + 0.02 #outer clad diameter 
+	radii = [r_pin, r_clad]
+        
+	#Linear enrichment distribution
+	a_e = 1
+	b_e = 2 #fit params for linear enrichment distribution (set a=0 to get constant enrichment)
+	def e_lin(r, a, b):
+	    return a*r + b
+	r_vals = np.arange(0,4*pitch,pitch) #radius of each lattice ring
+	e_vals = e_lin(r_vals, a_e, b_e) #enrichment of each lattice ring
+
+	#error: the materials.xml file keeps numbering these materials upwards (i.e. the second simulations has mat 7-12 instead of 1-6)
+	# Define materials
+	fuel0 = openmc.Material(material_id=1, name='fuel0')
+	fuel0.add_element('U',1,percent_type='ao',enrichment=e_vals[0])
+	fuel0.add_element('O',2)
+	fuel0.set_density('g/cc',10.4)
+
+	fuel1 = openmc.Material(material_id=2,name='fuel1')
+	fuel1.add_element('U',1,percent_type='ao',enrichment=e_vals[1])
+	fuel1.add_element('O',2)
+	fuel1.set_density('g/cc',10.4)
+
+	fuel2 = openmc.Material(material_id=3,name='fuel2')
+	fuel2.add_element('U',1,percent_type='ao',enrichment=e_vals[2])
+	fuel2.add_element('O',2)
+	fuel2.set_density('g/cc',10.4)
+
+	fuel3 = openmc.Material(material_id=4,name='fuel3')
+	fuel3.add_element('U',1,percent_type='ao',enrichment=e_vals[3])
+	fuel3.add_element('O',2)
+	fuel3.set_density('g/cc',10.4)
+
+	clad = openmc.Material(material_id=5,name='clad')
+	clad.add_element('Zr',1)
+	clad.set_density('g/cc',6)
+
+	water = openmc.Material(material_id=6,name='water')
+	water.add_element('O',1)
+	water.add_element('H',2)
+	water.set_density('g/cc',1.0)
+	water.add_s_alpha_beta('c_H_in_H2O')
+
+
+	# Instantiate a Materials collection, download cross-section data, and export to xml
+	#Library options: 'ENDFB-7.1-WMP','ENDFB-7.1-NNDC','TENDL-2019','FENDL-3.1d'
+	materials = openmc.Materials([fuel0, fuel1, fuel2, fuel3, clad, water])
+	odd.just_in_time_library_generator(libraries=['ENDFB-7.1-NNDC','ENDFB-7.1-WMP','TENDL-2019','FENDL-3.1d'],materials=materials)
+	materials.export_to_xml()
+
+	#Define geometry
+	pin_surfaces = [openmc.ZCylinder(r=r) for r in radii]
+	pin_universe0 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel0, clad, water]))
+	pin_universe1 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel1, clad, water]))
+	pin_universe2 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel2, clad, water]))
+	pin_universe3 = openmc.model.pin(pin_surfaces,openmc.Materials([fuel3, clad, water]))
+
+	all_water_cell = openmc.Cell(fill=water)
+	outer_universe = openmc.Universe(cells=(all_water_cell,))
+
+	lattice = openmc.HexLattice()
+	lattice.center = (0.,0.)
+	lattice.pitch = (pitch,)
+	lattice.outer = outer_universe
+
+	ring_0 = [pin_universe3]*18
+	ring_1 = [pin_universe2]*12
+	ring_2 = [pin_universe1]*6
+	ring_3 = [pin_universe0]
+
+	lattice.universes = [ring_0, ring_1, ring_2, ring_3] #listed from outer to inner
+
+	outer_surface = openmc.ZCylinder(r=r_core, boundary_type='reflective')
+	main_cell = openmc.Cell(fill=lattice, region=-outer_surface)
+	geometry = openmc.Geometry([main_cell])
+
+
+	#OpenMC simulation settings
+	batches = num_batches
+	inactive = int(num_batches/10)
+	particles = 500
+
+	settings = openmc.Settings()
+	settings.batches = batches
+	settings.inactive = inactive
+	settings.particles = particles
+	settings.output = {'tallies': True}
+
+	#Define uniform source
+	bounds = [-r_core, -r_core, -1, r_core, r_core, 1]
+	uniform_dist = openmc.stats.Box(bounds[:3], bounds[3:], only_fissionable=True)
+	settings.source = openmc.Source(space=uniform_dist)
+
+	#Define tallies
+	tallies = openmc.Tallies()
+
+	#Tally for flux spectrum
+
+	#create equal-lethargy energies to put in filter
+	energies = np.logspace(np.log10(1e-5),np.log10(20.0e6), 501)
+	energy_filter = openmc.EnergyFilter(energies)
+
+	t1 = openmc.Tally(name='flux')
+	t1.filters = [energy_filter]
+	t1.scores = ['flux']
+	tallies.append(t1)
+
+	#Tallies for spatial distribution of flux, absorption and fission rates
+
+	#X-Y cross-section mesh
+	Nm = 100
+	m1 = openmc.RegularMesh()
+	m1.dimension = [Nm,Nm]
+	m1.lower_left = [-r_core/2, -r_core/2]
+	m1.upper_right = [r_core/2, r_core/2]
+	m1_filter = openmc.MeshFilter(m1)
+
+	t2 = openmc.Tally(name='xy_mesh')
+	t2.filters = [m1_filter]
+	t2.scores = ['flux','fission','absorption','heating']
+	tallies.append(t2)
+
+	#X-Z cross-section mesh
+	m2 = openmc.RegularMesh()
+	m2.dimension = [Nm,1,Nm]
+	m2.lower_left = [-r_core/2, -0.1, -1]
+	m2.upper_right = [r_core/2, 0.1, 1]
+	m2_filter = openmc.MeshFilter(m2)
+
+	t3 = openmc.Tally(name='xz_mesh')
+	t3.filters = [m2_filter]
+	t3.scores = ['flux','fission','absorption','heating']
+	tallies.append(t3)
+
+	geometry.export_to_xml()
+	materials.export_to_xml()
+	settings.export_to_xml()
+	tallies.export_to_xml()
+	
+	model = openmc.model.Model(geometry, materials, settings, tallies)
+
+	return model
+
+def get_model_metrics(pitch, r_pin, a_e, b_e):
+
+	r_core = 6*pitch
+
+	#Evaluate k_eff and flux uniformity for a parametric model
+	model = build_model(pitch, r_core, r_pin, a_e, b_e)
+	
+	#Run OpenMC simulation
+	openmc.run(output=False)
+	
+	#Load the statepoint file
+	filename = 'statepoint.'+str(num_batches)+'.h5'
+	sp = openmc.StatePoint(filename)
+
+	#Get k_eff
+	k_eff = sp.keff.nominal_value
+
+	#Calculate flux uniformity metric
+	t = sp.get_tally(name='xy_mesh')
+	flux_xy = t.get_slice(scores=['flux']).get_pandas_dataframe()
+	flux_uniformity = (flux_xy['mean'].max()-flux_xy['mean'].min())/flux_xy['mean'].mean() # (max-min)/mean
+	
+	#Get average heat generation
+	heat_xy = t.get_slice(scores=['heating']).get_pandas_dataframe()
+	heat_gen = heat_xy['mean'].mean()
+	
+	return k_eff, flux_uniformity, heat_gen
+
+def get_flux_uniformity(pitch, r_pin, a_e, b_e):
+	
+	r_core = 6*pitch
+
+	#Evaluate k_eff and flux uniformity for a parametric model
+	model = build_model(pitch, r_core, r_pin, a_e, b_e)
+	
+	#Run OpenMC simulation
+	openmc.run(output=False)
+	
+	#Load the statepoint file
+	filename = 'statepoint.'+str(num_batches)+'.h5'
+	sp = openmc.StatePoint(filename)
+
+	#Calculate flux uniformity metric
+	t = sp.get_tally(name='xy_mesh')
+	flux_xy = t.get_slice(scores=['flux']).get_pandas_dataframe()
+	flux_uniformity = (flux_xy['mean'].max()-flux_xy['mean'].min())/flux_xy['mean'].mean() # (max-min)/mean
+
+	return flux_uniformity
+
+def get_heat_gen(pitch, r_pin, a_e, b_e):
+	
+	r_core = 6*pitch
+
+	#Evaluate k_eff and flux uniformity for a parametric model
+	model = build_model(pitch, r_core, r_pin, a_e, b_e)
+	
+	#Run OpenMC simulation
+	openmc.run(output=False)
+	
+	#Load the statepoint file
+	filename = 'statepoint.'+str(num_batches)+'.h5'
+	sp = openmc.StatePoint(filename)
+
+	#Get average heat generation
+	t = sp.get_tally(name='xy_mesh')
+	heat_xy = t.get_slice(scores=['heating']).get_pandas_dataframe()
+	heat_gen = heat_xy['mean'].mean()
+
+	return flux_uniformity
+
+
+def get_k_eff():
+	
+	#Load the statepoint file
+	filename = 'statepoint.'+str(num_batches)+'.h5'
+	sp = openmc.StatePoint(filename)
+
+	#Get k_eff
+	k_eff = sp.keff.nominal_value
+
+	return k_eff
+
+#Define range for each parameter (x_min, x_max, x_initialguess)
+r_pin_min = 0.2
+r_pin_max = 1.0
+pitch_vals_min = 0.5
+pitch_vals_max = 1.5
+r_core_vals = 6*pitch_vals
+a_e_min = 0.0
+a_e_max = 5.0
+b_e_min = 1.0
+b_e_vals = 10.0
+ 
+params = {
+    'float': {
+        'r_pin': (r_pin_min, r_pin_max, 0.5),
+        'pitch': (pitch_min, pitch_max, 1.0),
+	'a_e': (a_e_min, a_e_max, 1.0),
+	'b_e': (b_e_min, b_e_max, 5.0)
+
+    }
+}
+
+space = sp.Space()
+space.add_variables([
+    sp.Real(name, *para) for name, para in params['float'].items()
+])
+print(space)
+
+#Define objective function in ob format
+def fun_ob_config(config: sp.Configuration):
+    config_dict = config.get_dictionary()
+    X = np.array([config_dict['x%d' % i] for i in range(4)]) #list of design variables
+    r_pin, pitch, a_e, b_e = X[0], X[1], X[2], X[3]
+    k_eff, flux_uniformity, heat_gen = get_model_metrics(pitch, r_pin, a_e, b_e)
+    f = -flux_uniformity #objective function (to be minimized)
+    delta_k = 0.1 #slack for k_eff = 1 constraint
+    g1 = np.abs(k_eff-1) - delta_k #inequality constraint
+
+    result = dict()
+    result['objs'] = [f, ]
+    result['constraints'] = [g1] #g<=0 implies feasibility
+    return result
+
+#Define optimization problem
+opt = Optimizer(
+    fun_ob_config, #problem function
+    space, #variable space
+    num_constraints=1, #number of constraints
+    num_objs=1, #number of objectives
+    surrogate_type='gp',
+    acq_optimizer_type='random_scipy',
+    max_runs=20, #maximum number of runs allowed
+    task_id='soc',
+)
+
+#Run blackbox optimization algorithm
+history = opt.run()
+
+#Plot results
+history_file = opt.get_history()
+print(history)
+
+history_file.plot_convergence()
+
+
+
