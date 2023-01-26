@@ -12,6 +12,7 @@ Tutorial_Examples:
 ![image](xy_flux.png) ![image](xy_fission.png) ![image](xy_abs.png)
 
 Hex_Bundle_Optimization:
+- Black-box optimization of geometry and fuel enrichment for a hexagonal lattice of pincells, using OpenBox package (https://open-box.readthedocs.io/en/latest/)
 - Building a model for a hexagonal lattice of pincells. Enrichment is varied as a linear function of radius in order to flatten the spatial flux distribution.
 
 ![image](lattice_geometry_xz_view.png) 
